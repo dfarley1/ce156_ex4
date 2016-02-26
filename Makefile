@@ -27,10 +27,8 @@
 # Edit these variables for your project.
 # ======================================
 
-CLIENT_EXE = myclient
-SERVER_EXE = myserver
-CLIENT_CFILES = myclient.c
-SERVER_CFILES = myserver.c
+CLIENT_EXE = myproxy
+CLIENT_CFILES = myproxy.c
 COMMON_CFILES = myunp.c
 
 
