@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <signal.h>
+#include <netdb.h>
 
 #define LISTENQ 1024
 #define MAXLINE 4096

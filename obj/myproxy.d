@@ -36,4 +36,5 @@ myproxy.o: ../src/myproxy.c /usr/include/stdc-predef.h ../src/myunp.h \
  /usr/include/bits/signum.h /usr/include/bits/siginfo.h \
  /usr/include/bits/sigaction.h /usr/include/bits/sigcontext.h \
  /usr/include/bits/sigstack.h /usr/include/sys/ucontext.h \
- /usr/include/bits/sigthread.h
+ /usr/include/bits/sigthread.h /usr/include/netdb.h \
+ /usr/include/rpc/netdb.h /usr/include/bits/netdb.h

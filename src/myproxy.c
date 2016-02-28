@@ -8,13 +8,21 @@
 
 #define MAX_LISTEN_QUEUE 16
 #define MAX_URL_LENGTH 253
+#define MAX_PACKET_SIZE 32768
 
-int create_socket(int port);
-void *child_handler();
-void read_forbidden_list(char *forbidden_file);
+typedef struct {
+    int clisock = 0;
+    int remotesock = 0;
+    int closed = 0;
+} tInfo_t;
 
-int servsock, clisock, remotesock, remote_port = 0;
+int servsock, remote_port = 0;
 char **forbidden_sites = NULL;
+
+void read_forbidden_list(char *forbidden_file);
+int create_socket(int port);
+void *client_to_remote(void *threadInfo);
+void *remote_to_client(void *threadInfo);
 
 
 int main(int argc, char **argv)
@@ -34,8 +42,38 @@ int main(int argc, char **argv)
     servsock = create_socket(local_port);
     
     for (;;) {
-        clisock = Accept(servsock, (SA *) &cliaddr, &cliaddr_len);
-        //TODO
+        pthread_t tid;
+        tInfo_t *tInfo;
+        if ((tInfo = calloc(1, sizeof(tInfo_t))) == NULL) {
+            err_sys("main(): ERROR allocating memory!\n\n");
+        }
+        tInfo->clisock = Accept(servsock, (SA *) &cliaddr, &cliaddr_len);
+        printf("main(): Connection from %s:%u\n", 
+            inet_ntoa(cliaddr.sin_addr), cliaddr.sin_port);
+        
+        if((tInfo->remotesock = connect_remote(tInfo->clisock)) > 0) {
+            
+            //spawn client-to-remote
+            int rc = pthread_create(&tid, NULL, client_to_remote, (void *) tInfo);
+            if (rc != 0) {
+                printf("pthread_create() ERROR: %s\n\n", strerror(rc));
+                exit(2);
+            }
+            
+            //spawn remote-to-client
+            rc = pthread_create(&tid, NULL, remote_to_client, (void *) tInfo);
+            if (rc != 0) {
+                printf("pthread_create() ERROR: %s\n\n", strerror(rc));
+                exit(3);
+            }
+        } else {
+            
+            //send 501 (bad reuqest?)
+        }
+        
+        
+        
+        //if ((remotesock = connect_remote()) < 0)
     }
     
     return 0;
@@ -108,7 +146,7 @@ void read_forbidden_list(char *forbidden_file)
 //Create socket for the server end of the proxy
 int create_socket(int local_port)
 {
-    int _servsock, optval;
+    int _servsock, optval = 0;
     struct sockaddr_in servaddr;
     
     _servsock = Socket(AF_INET, SOCK_STREAM, 0);
@@ -125,4 +163,106 @@ int create_socket(int local_port)
     Listen(_servsock, MAX_LISTEN_QUEUE);
     
     return _servsock;
+}
+
+int connect_remote(int clisock)
+{
+    struct sockaddr_in remote_addr;
+    struct hostent *remote_host;
+    int n, 
+        remote_sock = 0, 
+        remote_port = 0;
+    char buffer[MAX_PACKET_SIZE],
+         request[10],
+         url[MAX_URL_LENGTH],
+         host[MAX_URL_LENGTH],
+         version[10],
+         *str_port;
+         
+    if ((n = recv(clisock, buffer, MAX_PACKET_SIZE, MSG_PEEK)) > 0) {
+        sscanf(buffer,"%s %s %s",request, url, version);
+        
+        //We only support GET and HEAD on HTTP 1.0 and 1.1
+        if(((strncmp(request, "GET", 3) == 0) || (strncmp(request, "HEAD", 4) == 0))
+          &&((strncmp(version, "HTTP/1.1", 8) == 0) || (strncmp(version, "HTTP/1.0", 8) == 0))
+          &&(strncasecmp(url, "http://", 7) == 0)) {
+            
+            remote_sock = Socket(AF_INET, SOCK_STREAM, 0);
+            
+            //If there's a : before the first / then there's a specific port being requested
+            if (strstr(url+7, ":") != NULL 
+              && (strstr(url + 7, ":") < strstr(url + 7, "/"))) {
+                //given "http://www.google.com:80/whatever"
+                //this will give us "HTTP"
+                str_port = strtok(url, ":");
+                //this gives us "//www.google.com"
+                str_port = strtok(NULL, ":");
+                
+                printf("  connect_remote(): if host=\"%s\"\n", str_port + 2);
+                if ((remote_host = gethostbyname(str_port + 2)) == NULL) {
+                    printf("  connect_remote(): gethostbyname() ERROR\n");
+                    close(remote_sock);
+                    return -1;
+                }
+                
+                //this will give us "80/whatever"
+                str_port = strtok(NULL, ":");
+                
+                remote_port = strtoul(str_port, NULL, 10);
+            } else {
+                //this gives us "HTTP"
+                str_port = strtok(url, "//");
+                //this gives us "www.google.com"
+                str_port = strtok(NULL, "/");
+                
+                printf("  connect_remote(): else host=\"%s\"\n", str_port);
+                if ((remote_host = gethostbyname(str_port)) == NULL) {
+                    printf("  connect_remote(): gethostbyname() ERROR\n");
+                    close(remote_sock);
+                    return -1;
+                }
+                remote_port = 80;
+            }
+            
+            bzero(&remote_addr, sizeof(remote_addr));
+            remote_addr.sin_family = AF_INET;
+            memcpy(&remote_addr.sin_addr.s_addr, remote_host->h_addr, remote_host->h_length);
+            remote_addr.sin_port = htons(remote_port);
+            
+            
+            printf("  connect_remote(): Connecting to %s:%u\n", 
+            inet_ntoa(remote_addr.sin_addr), remote_addr.sin_port);
+            if ((connect(remote_sock, (SA *) &remote_addr, sizeof(remote_addr))) < 0) {
+                printf("  connect_remote(): connect() ERROR\n");
+                close(remote_sock);
+                return -1;
+            }
+            
+        } 
+    } 
+    printf("  connect_remote(): Connected, returning...\n");
+    return remote_sock;
+}
+
+
+void *client_to_remote(void *threadInfo)
+{
+    tInfo_t *tInfo = (tInfo_t *) threadInfo;
+    int n;
+    
+    if(closed) {
+        
+    }
+    
+    while ((n = recv()) > 0) {
+        send();
+    }
+}
+void *remote_to_client(void *threadInfo)
+{
+    tInfo_t *tInfo = (tInfo_t *) threadInfo;
+    
+    if () {
+        close(tInfo->)
+    }
 }
