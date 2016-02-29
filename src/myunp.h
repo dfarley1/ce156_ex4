@@ -18,6 +18,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <netdb.h>
+#include <time.h>
 
 #define LISTENQ 1024
 #define MAXLINE 4096
