@@ -1,0 +1,64 @@
+CMPE 156 EX4 - HTTP GET/HEAD Proxy
+Daniel Farley
+
+See doc/ex4_0.pdf for assignment requirements. 
+
+
+----------
+Files:
+
+Makefile - Primary makefile, compile with "make" (provided)
+bin/
+    Makefile - Assembles executables from object files in /obj (provided)
+    myproxy - Proxy executable
+doc/
+    ex4_0.pdf - Program requirements
+    ex4-notes.pdf - Help/hints
+    README - This file
+obj/
+    Makefile - Creates objects from source code in /src (Provided)
+    myproxy.d - Dependency files
+    myunp.d - 
+    myproxy.o - Compiled objects
+    myunp.o - 
+src/
+    myproxy.c - Client code
+    myunp.h - Header for UNP wrapper (provided)
+    myunp.c - UNP wrapper and error handling (provided)
+    
+    
+
+----------
+Usage:
+
+    myproxy <port number> [forbidden_sites.text]
+
+
+----------
+Specification:
+    
+    The main proxy thread sets up and waits for a connection from a client.  
+Once it receives a connection, it peeks into the packet header to obtain 
+information on the desired enpoint (connect_remote()).  It then checks if the 
+packet is a valid HTTP GET or HEAD request and that the requested URL isn't 
+forbidden (read_forbidden_list() and allowed_url()) and  attempts to make a 
+connection to the remote host if so.  If it is not a valid packet type, no 
+remote connection is made and an appropriate error response it sent back to 
+the client (send_reply()).  
+    
+    If the connection is established, the main thread spawns two children: 
+one to forward traffic from the client to the remote host (client_to_remote())
+and one to forward traffic back from the remote host to the client 
+(remote_to_client()).  No parsing or checking is done on the remote->client 
+side, that simply echos messages.  The client->remote side checks every packet 
+to ensure that it is a GET or HEAD request and that the URL isn't forbidden 
+before forwarding it.
+    
+    
+----------
+Notes:
+
+* Logging is very rudimentary and "tacked on", something much more robust 
+    should be implemented.
+* File descriptor closings and connect_remote() return values/error replies 
+    are disorganized and inconsistent.  
