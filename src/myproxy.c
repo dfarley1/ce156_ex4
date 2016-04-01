@@ -1,6 +1,5 @@
 /*
  * Daniel Farley - dfarley@ucsc.edu
- * CE 156 - Programing Assignment 4
  * Usage: ./myproxy <local_port>
  */
 
